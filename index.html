@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Odliczacz - Licznik Czasu</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --container-bg: #ffffff;
+            --text-color: #333;
+            --section-bg: #f8f9fa;
+            --section-border: #e0e0e0;
+            --input-bg: #ffffff;
+            --input-border: #ccc;
+            --input-color: #333;
+            --card-bg: #ffffff;
+            --card-border: #e0e0e0;
+            --primary-color: #6200ee;
+            --primary-hover: #3700b3;
+            --danger-color: #d93025;
+            --time-box-bg: #f1f3f4;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --container-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --section-bg: #2d2d2d;
+            --section-border: #404040;
+            --input-bg: #2d2d2d;
+            --input-border: #555;
+            --input-color: #e0e0e0;
+            --card-bg: #252525;
+            --card-border: #333;
+            --primary-color: #bb86fc;
+            --primary-hover: #3700b3;
+            --danger-color: #cf6679;
+            --time-box-bg: #333333;
+        }
+
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color); transition: background 0.3s, color 0.3s; }
+        .container { max-width: 500px; background: var(--container-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: auto; transition: background 0.3s; }
+        
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h2 { text-align: center; margin: 0; color: var(--primary-color); flex-grow: 1; }
+        .theme-btn { background: none; border: none; font-size: 1.4em; cursor: pointer; padding: 5px; width: auto; }
+
+        .section { background: var(--section-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--section-border); }
+        .section-title { font-weight: bold; margin-bottom: 10px; display: block; color: var(--text-color); }
+        
+        input[type="text"], input[type="datetime-local"] { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--input-border); border-radius: 6px; font-size: 1em; background-color: var(--input-bg); color: var(--input-color); }
+        
+        button { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background-color: var(--primary-hover); }
+
+        .event-card { background: var(--card-bg); border: 1px solid var(--card-border); padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative; }
+        .event-title { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; color: var(--text-color); }
+        
+        .countdown-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-bottom: 12px; }
+        .time-box { background: var(--time-box-bg); padding: 8px 4px; border-radius: 6px; }
+        .time-value { font-size: 1.2em; font-weight: bold; color: var(--primary-color); }
+        .time-label { font-size: 0.75em; color: var(--text-color); opacity: 0.8; }
+
+        .btn-delete { background-color: var(--danger-color); padding: 6px; font-size: 0.9em; margin-top: 5px; }
+        .btn-delete:hover { opacity: 0.85; }
+        .expired { color: var(--danger-color); font-weight: bold; text-align: center; padding: 10px; }
+    </style>
+</head>
+<body data-theme="light">
+
+<div class="container">
+    <div class="header-top">
+        <h2>⏳</h2>
+        <button class="theme-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Zmień motyw">🌙</button>
+    </div>
+    
+    <div class="section">
+        <span class="section-title"></span>
+        <input type="text" id="event-name" placeholder="Nazwa wydarzenia (np. Wakacje)">
+        <input type="datetime-local" id="event-date">
+        <button onclick="addEvent()">Dodaj odliczanie</button>
+    </div>
+
+    <div id="events-list"></div>
+</div>
+
+<script>
+let events = JSON.parse(localStorage.getItem('countdown_events')) || [
+    { id: 1, name: "Nowy Rok", date: "2027-01-01T00:00" }
+];
+
+function saveData() {
+    localStorage.setItem('countdown_events', JSON.stringify(events));
+}
+
+function setTheme(theme) {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('countdown_theme', theme);
+    document.getElementById('theme-toggle-btn').innerText = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+    const currentTheme = document.body.getAttribute('data-theme');
+    setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const savedTheme = localStorage.getItem('countdown_theme') || 'light';
+    setTheme(savedTheme);
+    renderEvents();
+    setInterval(updateCountdowns, 1000); // Odświeżaj co sekundę
+});
+
+function addEvent() {
+    const nameInput = document.getElementById('event-name');
+    const dateInput = document.getElementById('event-date');
+    
+    const name = nameInput.value.trim();
+    const date = dateInput.value;
+
+    if (!name || !date) {
+        alert("Wpisz nazwę i wybierz datę!");
+        return;
+    }
+
+    const newEvent = {
+        id: Date.now(),
+        name: name,
+        date: date
+    };
+
+    events.push(newEvent);
+    saveData();
+    
+    nameInput.value = "";
+    dateInput.value = "";
+    renderEvents();
+}
+
+function deleteEvent(id) {
+    events = events.filter(ev => ev.id !== id);
+    saveData();
+    renderEvents();
+}
+
+function renderEvents() {
+    const listContainer = document.getElementById('events-list');
+    listContainer.innerHTML = '';
+
+    if (events.length === 0) {
+        listContainer.innerHTML = '<p style="text-align: center; opacity: 0.6;">Brak aktywnych odliczeń.</p>';
+        return;
+    }
+
+    events.forEach(ev => {
+        const card = document.createElement('div');
+        card.className = 'event-card';
+        card.setAttribute('data-date', ev.date);
+        card.id = `event-${ev.id}`;
+
+        card.innerHTML = `
+            <div class="event-title">${ev.name}</div>
+            <div class="countdown-grid" id="grid-${ev.id}">
+                <div class="time-box"><div class="time-value" id="days-${ev.id}">0</div><div class="time-label">dni</div></div>
+                <div class="time-box"><div class="time-value" id="hours-${ev.id}">0</div><div class="time-label">godz</div></div>
+                <div class="time-box"><div class="time-value" id="mins-${ev.id}">0</div><div class="time-label">min</div></div>
+                <div class="time-box"><div class="time-value" id="secs-${ev.id}">0</div><div class="time-label">sek</div></div>
+            </div>
+            <div id="expired-${ev.id}" style="display: none;" class="expired">Wydarzenie już minęło! 🎉</div>
+            <button class="btn-delete" onclick="deleteEvent(${ev.id})">Usuń</button>
+        `;
+        listContainer.appendChild(card);
+    });
+
+    updateCountdowns();
+}
+
+function updateCountdowns() {
+    const now = new Date().getTime();
+
+    events.forEach(ev => {
+        const targetDate = new Date(ev.date).getTime();
+        const difference = targetDate - now;
+
+        const grid = document.getElementById(`grid-${ev.id}`);
+        const expiredMsg = document.getElementById(`expired-${ev.id}`);
+
+        if (!grid) return;
+
+        if (difference < 0) {
+            grid.style.display = 'none';
+            expiredMsg.style.display = 'block';
+            return;
+        }
+
+        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+        document.getElementById(`days-${ev.id}`).innerText = days;
+        document.getElementById(`hours-${ev.id}`).innerText = hours;
+        document.getElementById(`mins-${ev.id}`).innerText = minutes;
+        document.getElementById(`secs-${ev.id}`).innerText = seconds;
+    });
+}
+</script>
+
+</body>
+</html>
